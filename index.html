@@ -1,105 +1,401 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
+
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>採購系統（Google Sheets 同步）</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>採購紀錄系統</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f9f9f9;
+        }
+
+        h1 {
+            text-align: center;
+            margin: 1rem;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: row;
+            height: calc(100vh - 80px);
+            padding: 0 1rem 1rem;
+            gap: 1rem;
+        }
+
+        .form-section {
+            flex: 0 0 30%;
+            background: white;
+            padding: 1rem;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
+            height: 100%;
+        }
+
+        .form-group {
+            display: flex;
+            align-items: center;
+            margin: 0.5rem 0;
+        }
+
+        .form-group label {
+            width: 35%;
+            font-weight: bold;
+        }
+
+        .form-group input,
+        .form-group select {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f8f8f8;
+        }
+
+        .form-group input::placeholder {
+            color: #aaa;
+        }
+
+        form button {
+            width: 100%;
+            padding: 0.75rem;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 1rem;
+        }
+
+        .data-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #month-filter,
+        #search {
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            margin-bottom: 0.5rem;
+        }
+
+        .summary {
+            text-align: right;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .record-list {
+            flex: 1;
+            overflow-y: auto;
+            background: white;
+            border-radius: 10px;
+            padding: 1rem;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            word-break: break-word;
+            position: relative;
+
+        }
+
+        th,
+        td {
+            background-color: #f5f5f5;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+
+        }
+
+        /* 讓第 2 欄品項欄位完整顯示，並且自動換行 */
+        table th:nth-child(2),
+        table td:nth-child(2) {
+            white-space: normal;
+            word-break: break-word;
+            overflow: visible;
+            text-overflow: clip;
+        }
+
+
+        thead th {
+            position: sticky;
+            top: 0;
+            background-color: #f0f0f0;
+            z-index: 1;
+        }
+
+        tbody tr:hover {
+            background-color: #f1f1f1;
+        }
+    </style>
 </head>
+
 <body>
-  <h2>採購系統</h2>
-  <form id="purchase-form">
-    <input type="date" id="date" required placeholder="日期" />
-    <input type="text" id="item" required placeholder="品項" />
-    <input type="number" id="quantity" required placeholder="數量" />
-    <input type="number" id="arrivalDays" required placeholder="到貨天數" />
-    <input type="number" id="cost" required placeholder="成本" step="any"/>
-    <input type="number" id="shipping" placeholder="運費" step="any"/>
-    <textarea id="url" placeholder="網址/備註"></textarea>
-    <button type="submit">新增</button>
-  </form>
+    <h1>採購紀錄系統</h1>
+    <div class="container">
+        <div class="form-section">
+            <form id="purchase-form">
+                <div class="form-group"><label for="date">📅 購買日期</label><input type="date" id="date" required
+                        placeholder="選擇購買日期"></div>
+                <div class="form-group"><label for="item">📦 品項</label><input type="text" id="item" list="item-list"
+                        required placeholder="輸入品項名稱"><datalist id="item-list"></datalist></div>
+                <div class="form-group"><label for="quantity">🔢 數量</label><input type="number" id="quantity" required
+                        placeholder="輸入數量（如 10）">
+                </div>
+                <div class="form-group"><label for="arrival-days">🕒 到貨天數</label><input type="number" id="arrival-days"
+                        placeholder="預估幾天後到貨">
+                </div>
+                <div class="form-group"><label for="cost">💰 單位成本</label><input type="number" id="cost" required
+                        placeholder="單位成本（如 25.5）" step="any"></div>
+                <div class="form-group"><label for="shipping" step="any">🚚 運費</label><input type="number" id="shipping"
+                        placeholder="本次運費（可留空）"></div>
+                <div class="form-group"><label for="url">📝 網址/備註</label><input type="text" id="url"
+                        placeholder="可輸入網址或備註內容"></div>
+                <button type="submit">新增紀錄</button>
+            </form>
+        </div>
+        <div class="data-section">
+            <select id="month-filter"></select>
+            <input type="text" id="search" placeholder="搜尋關鍵字...">
+            <div class="summary">
+                貨物總成本：$<span id="monthly-goods">0</span><br>
+                運費成本：$<span id="monthly-shipping">0</span><br>
+                總成本：$<span id="monthly-total">0</span>
+            </div>
+            <div class="record-list">
+                <table id="records">
+                    <thead>
+                        <tr>
+                            <th>購買日期</th>
+                            <th>品項</th>
+                            <th>數量</th>
+                            <th>到貨天數</th>
+                            <th>預估到貨日</th>
+                            <th>成本</th>
+                            <th>運費</th>
+                            <th>網址/備註</th>
+                            <th>已進貨</th>
+                            <th>刪除</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <button onclick="undoLastDelete()"
+        style="position: fixed; bottom: 10px; left: 10px; background: #ffc107; color: black; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer;">復原上一筆刪除</button>
+    <script>
+        const form = document.getElementById("purchase-form");
+        const tbody = document.querySelector("#records tbody");
+        const itemList = document.getElementById("item-list");
+        const searchInput = document.getElementById("search");
+        const monthFilter = document.getElementById("month-filter");
+        const monthlyTotalSpan = document.getElementById("monthly-total");
+        const monthlyGoodsSpan = document.getElementById("monthly-goods");
+        const monthlyShippingSpan = document.getElementById("monthly-shipping");
 
-  <hr>
-  <input type="text" id="search" placeholder="搜尋..." />
-  <table border="1" width="100%">
-    <thead>
-      <tr>
-        <th>購買日期</th><th>品項</th><th>數量</th><th>到貨天數</th><th>預估到貨日</th><th>成本</th><th>運費</th><th>網址/備註</th>
-      </tr>
-    </thead>
-    <tbody id="record-body"></tbody>
-  </table>
+        let allRecords = [];
+        let lastDeleted = null;
+        let itemHistory = new Set();
 
-  <script>
-    const scriptURL = "https://script.google.com/macros/s/AKfycbyK7Z5rlHCc7AWORPCl0dd9pQ5n2moeiIpNPD6vfwp9PelnDenn40NRmu7SNbpL4uCSQg/exec";
-    const form = document.getElementById("purchase-form");
-    const tbody = document.getElementById("record-body");
-    const searchInput = document.getElementById("search");
+        function generateMonthOptions() {
+            monthFilter.innerHTML = '';
+            const allOption = document.createElement("option");
+            allOption.value = "all";
+            allOption.textContent = "全部月份";
+            monthFilter.appendChild(allOption);
+            const now = new Date();
+            for (let i = 0; i < 12; i++) {
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const monthStr = `${year}-${month}`;
+                const option = document.createElement("option");
+                option.value = monthStr;
+                option.textContent = monthStr;
+                if (i === 0) option.selected = true;
+                monthFilter.appendChild(option);
+            }
+        }
 
-    let allRecords = [];
+        function renderTable() {
+            let goodsTotal = 0;
+            let shippingTotal = 0;
+            tbody.innerHTML = '';
+            const query = searchInput.value.toLowerCase();
+            const selectedMonth = monthFilter.value;
+            const filtered = allRecords.map((r, i) => ({ ...r, _index: i })).filter(record => {
+                const text = Object.values(record).join(' ').toLowerCase();
+                return text.includes(query) && (selectedMonth === "all" || record.date.startsWith(selectedMonth));
+            });
+            filtered.forEach(record => {
+                goodsTotal += Number(record.cost || 0) * Number(record.quantity || 0);
+                shippingTotal += Number(record.shipping || 0);
+                const row = document.createElement("tr");
+                const estimatedArrival = record.date && record.arrivalDays ? new Date(new Date(record.date).getTime() + record.arrivalDays * 86400000).toISOString().slice(0, 10) : '';
+                row.innerHTML = `
+      <td title="${record.date}">${record.date.slice(5)}</td>
+      <td>${record.item}</td>
+      <td>${record.quantity}</td>
+      <td>${record.arrivalDays || ''}</td>
+      <td title="${estimatedArrival}">${estimatedArrival.slice(5)}</td>
+      <td>$${parseFloat(record.cost).toFixed(2)}</td>
+      <td>$${parseFloat(record.shipping || 0).toFixed(2)}</td>
+      <td>${record.url ? (record.url.startsWith('http') ? `<a href="${record.url}" target="_blank">查看</a>` : record.url.replace(/\n/g, '<br>')) : ''}</td>
+      <td><input type="checkbox"></td>
+      <td><button class="delete-btn" data-index="${record._index}" style="background:#f33;color:#fff;border:none;border-radius:4px;padding:2px 6px;cursor:pointer;">刪除</button></td>
+    `;
+                tbody.appendChild(row);
+                row.querySelector(".delete-btn").addEventListener("click", () => {
+                    lastDeleted = allRecords.splice(record._index, 1)[0];
+                    renderTable();
+                });
+                const fields = ["date", "item", "quantity", "arrivalDays", "cost", "shipping", "url"];
+                const fieldIndexMap = {
+                    date: 0,
+                    item: 1,
+                    quantity: 2,
+                    arrivalDays: 3,
+                    cost: 5,
+                    shipping: 6,
+                    url: 7
+                };
+                Object.entries(fieldIndexMap).forEach(([field, index]) => {
+                    const cell = row.children[index];
+                    if (!cell) return;
+                    cell.addEventListener("dblclick", () => {
+                        const original = record[field] || '';
+                        const input = document.createElement("input");
+                        input.type = field === 'date' ? 'date' : (typeof original === 'number' ? 'number' : 'text');
+                        input.value = original;
+                        input.style.width = '100%';
+                        input.addEventListener('keydown', e => {
+                            if (e.key === 'Enter') input.blur();
+                            if (e.key === 'Escape') cell.innerHTML = original;
+                        });
+                        input.addEventListener('blur', () => {
+                            const newVal = input.value;
+                            allRecords[record._index][field] = ["cost", "shipping", "quantity", "arrivalDays"].includes(field) ? parseFloat(newVal) : newVal;
+                            renderTable();
+                        });
+                        cell.innerHTML = '';
+                        cell.appendChild(input);
+                        input.focus();
+                    });
+                });
+            });
+            monthlyGoodsSpan.textContent = goodsTotal.toFixed(2);
+            monthlyShippingSpan.textContent = shippingTotal.toFixed(2);
+            monthlyTotalSpan.textContent = (goodsTotal + shippingTotal).toFixed(2);
+        }
 
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const record = {
-        date: document.getElementById("date").value,
-        item: document.getElementById("item").value,
-        quantity: Number(document.getElementById("quantity").value),
-        arrivalDays: Number(document.getElementById("arrivalDays").value),
-        cost: Number(document.getElementById("cost").value),
-        shipping: Number(document.getElementById("shipping").value || 0),
-        url: document.getElementById("url").value,
-      };
-      await fetch(scriptURL, {
-        method: "POST",
-        body: JSON.stringify(record),
-        headers: { "Content-Type": "application/json" }
-      });
-      form.reset();
-      await loadData();
+        form.addEventListener("submit", e => {
+            e.preventDefault();
+            const date = form.date.value;
+            const item = form.item.value;
+            const quantity = parseInt(form.quantity.value);
+            const arrivalDays = parseInt(form["arrival-days"].value) || 0;
+            const cost = parseFloat(form.cost.value);
+            const shipping = parseFloat(form.shipping.value) || 0;
+            const url = form.url.value;
+            if (!date || !item || isNaN(quantity) || isNaN(cost)) return alert("請確認必填欄位皆已填寫且格式正確");
+            allRecords.push({ date, item, quantity, arrivalDays, cost, shipping, url });
+            if (!itemHistory.has(item)) {
+                itemHistory.add(item);
+                const option = document.createElement("option");
+                option.value = item;
+                itemList.appendChild(option);
+            }
+            form.reset();
+            renderTable();
+        });
+
+        document.addEventListener("DOMContentLoaded", () => {
+            generateMonthOptions();
+            renderTable();
+            monthFilter.addEventListener("change", renderTable);
+            searchInput.addEventListener("input", renderTable);
+        });
+        function undoLastDelete() {
+            if (lastDeleted) {
+                allRecords.push(lastDeleted);
+                lastDeleted = null;
+                renderTable();
+            } else {
+                alert("沒有可復原的紀錄。");
+            }
+        }
+    </script>
+<script>
+// ✅ Google Sheets API URL
+const scriptURL = "https://script.google.com/macros/s/AKfycbyK7Z5rlHCc7AWORPCl0dd9pQ5n2moeiIpNPD6vfwp9PelnDenn40NRmu7SNbpL4uCSQg/exec";
+
+// ✅ 用原始結構接收資料
+async function loadRemoteData() {
+  try {
+    const res = await fetch(scriptURL);
+    const data = await res.json();
+    allRecords = data.map(r => ({
+      date: r.date,
+      item: r.item,
+      quantity: Number(r.quantity),
+      arrivalDays: Number(r.arrivalDays),
+      cost: Number(r.cost),
+      shipping: Number(r.shipping),
+      url: r.url
+    }));
+    renderTable(); // 呼叫原始渲染函式
+  } catch (e) {
+    console.error("讀取 Google Sheets 發生錯誤：", e);
+  }
+}
+
+// ✅ 將送出的表單資料送至 Google Sheets
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const record = {
+    date: dateInput.value,
+    item: itemInput.value,
+    quantity: Number(quantityInput.value),
+    arrivalDays: Number(arrivalDaysInput.value),
+    cost: Number(costInput.value),
+    shipping: Number(shippingInput.value) || 0,
+    url: urlInput.value
+  };
+  try {
+    await fetch(scriptURL, {
+      method: "POST",
+      body: JSON.stringify(record),
+      headers: { "Content-Type": "application/json" }
     });
+    form.reset();
+    await loadRemoteData(); // 重新載入最新資料
+  } catch (e) {
+    console.error("寫入 Google Sheets 失敗：", e);
+  }
+});
 
-    async function loadData() {
-      const res = await fetch(scriptURL);
-      const data = await res.json();
-      allRecords = data.map(r => {
-        return {
-          date: r.date,
-          item: r.item,
-          quantity: r.quantity,
-          arrivalDays: r.arrivalDays,
-          cost: r.cost,
-          shipping: r.shipping,
-          url: r.url
-        };
-      });
-      renderTable();
-    }
+// ✅ 載入資料
+window.addEventListener("DOMContentLoaded", loadRemoteData);
+</script>
 
-    function renderTable() {
-      const keyword = searchInput.value.toLowerCase();
-      const filtered = allRecords.filter(r =>
-        Object.values(r).some(val => String(val).toLowerCase().includes(keyword))
-      );
-      tbody.innerHTML = "";
-      filtered.forEach(r => {
-        const estArrival = r.date && r.arrivalDays
-          ? new Date(new Date(r.date).getTime() + r.arrivalDays * 86400000).toISOString().slice(5, 10)
-          : "";
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${r.date ? r.date.slice(5) : ""}</td>
-          <td>${r.item}</td>
-          <td>${r.quantity}</td>
-          <td>${r.arrivalDays}</td>
-          <td>${estArrival}</td>
-          <td>$${Number(r.cost).toFixed(2)}</td>
-          <td>$${Number(r.shipping).toFixed(2)}</td>
-          <td>${r.url}</td>`;
-        tbody.appendChild(tr);
-      });
-    }
-
-    searchInput.addEventListener("input", renderTable);
-    window.onload = loadData;
-  </script>
 </body>
+
 </html>
