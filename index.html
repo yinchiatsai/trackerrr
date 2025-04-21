@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>採購系統（Google Sheets 同步）</title>
+</head>
+<body>
+  <h2>採購系統</h2>
+  <form id="purchase-form">
+    <input type="date" id="date" required placeholder="日期" />
+    <input type="text" id="item" required placeholder="品項" />
+    <input type="number" id="quantity" required placeholder="數量" />
+    <input type="number" id="arrivalDays" required placeholder="到貨天數" />
+    <input type="number" id="cost" required placeholder="成本" step="any"/>
+    <input type="number" id="shipping" placeholder="運費" step="any"/>
+    <textarea id="url" placeholder="網址/備註"></textarea>
+    <button type="submit">新增</button>
+  </form>
+
+  <hr>
+  <input type="text" id="search" placeholder="搜尋..." />
+  <table border="1" width="100%">
+    <thead>
+      <tr>
+        <th>購買日期</th><th>品項</th><th>數量</th><th>到貨天數</th><th>預估到貨日</th><th>成本</th><th>運費</th><th>網址/備註</th>
+      </tr>
+    </thead>
+    <tbody id="record-body"></tbody>
+  </table>
+
+  <script>
+    const scriptURL = "https://script.google.com/macros/s/AKfycbyK7Z5rlHCc7AWORPCl0dd9pQ5n2moeiIpNPD6vfwp9PelnDenn40NRmu7SNbpL4uCSQg/exec";
+    const form = document.getElementById("purchase-form");
+    const tbody = document.getElementById("record-body");
+    const searchInput = document.getElementById("search");
+
+    let allRecords = [];
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const record = {
+        date: document.getElementById("date").value,
+        item: document.getElementById("item").value,
+        quantity: Number(document.getElementById("quantity").value),
+        arrivalDays: Number(document.getElementById("arrivalDays").value),
+        cost: Number(document.getElementById("cost").value),
+        shipping: Number(document.getElementById("shipping").value || 0),
+        url: document.getElementById("url").value,
+      };
+      await fetch(scriptURL, {
+        method: "POST",
+        body: JSON.stringify(record),
+        headers: { "Content-Type": "application/json" }
+      });
+      form.reset();
+      await loadData();
+    });
+
+    async function loadData() {
+      const res = await fetch(scriptURL);
+      const data = await res.json();
+      allRecords = data.map(r => {
+        return {
+          date: r.date,
+          item: r.item,
+          quantity: r.quantity,
+          arrivalDays: r.arrivalDays,
+          cost: r.cost,
+          shipping: r.shipping,
+          url: r.url
+        };
+      });
+      renderTable();
+    }
+
+    function renderTable() {
+      const keyword = searchInput.value.toLowerCase();
+      const filtered = allRecords.filter(r =>
+        Object.values(r).some(val => String(val).toLowerCase().includes(keyword))
+      );
+      tbody.innerHTML = "";
+      filtered.forEach(r => {
+        const estArrival = r.date && r.arrivalDays
+          ? new Date(new Date(r.date).getTime() + r.arrivalDays * 86400000).toISOString().slice(5, 10)
+          : "";
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${r.date ? r.date.slice(5) : ""}</td>
+          <td>${r.item}</td>
+          <td>${r.quantity}</td>
+          <td>${r.arrivalDays}</td>
+          <td>${estArrival}</td>
+          <td>$${Number(r.cost).toFixed(2)}</td>
+          <td>$${Number(r.shipping).toFixed(2)}</td>
+          <td>${r.url}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    searchInput.addEventListener("input", renderTable);
+    window.onload = loadData;
+  </script>
+</body>
+</html>
